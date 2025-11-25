@@ -24,10 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key-change-in-production')
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY must be set in environment variables")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
@@ -51,6 +53,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -58,7 +61,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'alpina_digital.urls'
@@ -84,11 +86,11 @@ WSGI_APPLICATION = 'alpina_digital.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
+# ИСПОЛЬЗУЕМ ТОЛЬКО SQLITE ДЛЯ УЧЕБНОГО ПРОЕКТА
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': BASE_DIR / 'db' / 'db.sqlite3',
     }
 }
 
@@ -128,7 +130,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Путь внутри контейнера web, который будет смонтирован как том static_volume
+STATIC_ROOT = '/app/staticfiles/' # <-- ВАЖНО: именно так
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -156,4 +159,38 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+# ===== OPENAI (заглушка) =====
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', 'demo-mode-no-key-required')
+
+# ===== БЕЗОПАСНОСТЬ ДЛЯ ПРОДАКШЕНА (опционально для учебного) =====
+if not DEBUG:
+    # HTTPS настройки (опционально)
+    # SECURE_BROWSER_XSS_FILTER = True
+    # SECURE_CONTENT_TYPE_NOSNIFF = True
+    # X_FRAME_OPTIONS = 'DENY'
+
+    # CSRF настройки (опционально)
+    # CSRF_COOKIE_SECURE = True
+    # SESSION_COOKIE_SECURE = True
+
+    CSRF_TRUSTED_ORIGINS = [
+                           f"http://{host}" for host in ALLOWED_HOSTS
+                       ] + [
+                           f"https://{host}" for host in ALLOWED_HOSTS
+                       ]
+
+# ===== ЛОГИРОВАНИЕ ДЛЯ ПРОДАКШЕНА (опционально для учебного) =====
+if not DEBUG:
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+            },
+        },
+        'root': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    }
