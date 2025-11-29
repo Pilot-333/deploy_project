@@ -1,6 +1,6 @@
 services:
   web:
-    image: ghcr.io/Pilot-333/deploy_project:latest
+    image: ghcr.io/pilot-333/deploy_project:latest
     env_file:
       - .env
     volumes:
