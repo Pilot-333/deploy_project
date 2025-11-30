@@ -11,10 +11,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  # явно формируем имя изображения: lowercased owner + repo
-  # IMAGE_REPO: ${{ toLower(github.repository_owner) }}/deploy_project
-  # IMAGE_NAME: ${{ github.repository }}
-  IMAGE_REPO: pilot-333/deploy_project
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-deploy:
@@ -22,6 +19,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Debug workspace structure
+        run: |
+          echo "=== Debug Information ==="
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+          echo "Current directory: $(pwd)"
+          echo "Listing all files:"
+          ls -la
+          echo "Looking for docker-compose.yml:"
+          find . -name "docker-compose.yml" -type f
+          echo "Looking for nginx.conf:"
+          find . -name "nginx.conf" -type f
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -31,8 +40,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          # если добавлен CR_PAT — используем его, иначе пробуем GITHUB_TOKEN
-          password: ${{ secrets.CR_PAT || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Extract metadata
         id: meta
@@ -47,12 +55,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
           push: true
-          tags: |
-            ghcr.io/pilot-333/deploy_project:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max            
+          cache-to: type=gha,mode=max
 
       - name: Copy files to VPS using SCP
         uses: appleboy/scp-action@v0.1.3
@@ -73,29 +80,43 @@ jobs:
           script: |
             set -euo pipefail
 
+            if ! command -v docker &> /dev/null; then
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sh get-docker.sh
+            fi
+
+            if ! command -v docker-compose &> /dev/null; then
+              curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              chmod +x /usr/local/bin/docker-compose
+              ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+            fi
+
+            echo "Docker and Docker Compose installed"
+            docker --version
+            docker-compose --version
+
             VPS_DIR="/opt/deploy_project"
             mkdir -p "$VPS_DIR"
             cd "$VPS_DIR"
 
-            # Создаём .env на сервере (без DB-переменных!)
+            echo "Checking files in directory:"
+            ls -la
+
             echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
             echo "DEBUG=False" >> .env
-            echo "ALLOWED_HOSTS=*" >> .env
+            echo "ALLOWED_HOSTS=${{ secrets.VPS_HOST }},localhost,127.0.0.1" >> .env
             echo "OPENAI_API_KEY=demo-mode-no-key-required" >> .env
 
-            # # Логин в GHCR
-            # echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            if [ -n "${{ secrets.CR_PAT }}" ]; then
-              echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            fi
+            docker-compose config
 
-            # Перезапуск
             docker-compose down 2>/dev/null || true
             docker-compose pull
+            docker-compose run --rm web python manage.py migrate --noinput
             docker-compose run --rm web python manage.py collectstatic --noinput --clear
             docker-compose up -d
 
             sleep 10
             docker-compose ps
-            echo "✅ Deployment completed successfully"
+            echo "Deployment completed successfully"

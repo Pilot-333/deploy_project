@@ -282,7 +282,8 @@ OPENAI_API_KEY=demo-mode-no-key-required
 
 ### Настройки GitHub Secrets
 Для работы CI/CD необходимо настроить секреты в репозитории:
-- `CR_PAT` - Personal Access Token GitHub
+- `DOCKER_PASSWORD` - Personal Access Token GitHub
+- `DOCKER_USERNAME` - GitHub username
 - `SECRET_KEY` - Секретный ключ Django
 - `VPS_HOST` - `5.23.55.202`
 - `VPS_USER` - `root`
