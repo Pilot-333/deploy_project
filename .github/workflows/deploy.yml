@@ -32,7 +32,6 @@ jobs:
           username: ${{ github.actor }}
           # если добавлен CR_PAT — используем его, иначе пробуем GITHUB_TOKEN
           password: ${{ secrets.CR_PAT || secrets.GITHUB_TOKEN }}
-          # password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
@@ -47,11 +46,12 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ghcr.io/${{ toLower(github.repository_owner) }}/deploy_project:latest
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max            
 
       - name: Copy files to VPS using SCP
         uses: appleboy/scp-action@v0.1.3
