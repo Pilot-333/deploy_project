@@ -4,9 +4,16 @@ on:
   push:
     branches: [main]
 
+# Разрешаем Actions писать пакеты
+permissions:
+  contents: read
+  packages: write
+
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # явно формируем имя изображения: lowercased owner + repo
+  IMAGE_REPO: ${{ toLower(github.repository_owner) }}/deploy_project
+  # IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-deploy:
@@ -23,7 +30,9 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # если добавлен CR_PAT — используем его, иначе пробуем GITHUB_TOKEN
+          password: ${{ secrets.CR_PAT || secrets.GITHUB_TOKEN }}
+          # password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
@@ -73,8 +82,12 @@ jobs:
             echo "ALLOWED_HOSTS=*" >> .env
             echo "OPENAI_API_KEY=demo-mode-no-key-required" >> .env
 
-            # Логин в GHCR
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # # Логин в GHCR
+            # echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            if [ -n "${{ secrets.CR_PAT }}" ]; then
+              echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            fi
 
             # Перезапуск
             docker-compose down 2>/dev/null || true
