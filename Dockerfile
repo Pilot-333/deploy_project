@@ -23,8 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Создаем пользователя для безопасности (опционально)
-RUN useradd -m -r django && chown -R django /app
-USER django
+# RUN useradd -m -r django && chown -R django /app
+# USER django
 
 # Открываем порт
 EXPOSE 8000
